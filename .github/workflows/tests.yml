@@ -1,0 +1,103 @@
+# This callable workflow is called from separate workflows for each Ubuntu
+# runner version. We use separate workflows for runner version rather than a
+# matrix to allow creating status badges for each runner version.
+name: Tests
+
+on:
+  workflow_call:
+    inputs:
+      runner-os:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: ${{ inputs.runner-os }}-clang-format-${{ matrix.clang-format-version }}
+    runs-on: ${{ inputs.runner-os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        clang-format-version:
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+          - 19
+          - 20
+          - 21
+          - 22
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+    - name: Build and test the Docker image
+      env:
+        CLANG_FORMAT_VERSION: ${{ matrix.clang-format-version }}
+      run: test/test.sh "$CLANG_FORMAT_VERSION"
+  e2e:
+    name: E2E ${{ inputs.runner-os }}-clang-format-${{ matrix.clang-format-version }}-${{ matrix.path['check'] }}
+    runs-on: ${{ inputs.runner-os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        clang-format-version:
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+          - 19
+          - 20
+          - 21
+          - 22
+        path:
+          - check: 'test/known_fail'
+            exclude: 'capital'
+            known_fail: true
+          - check: 'test/known_pass'
+            exclude: 'capital'
+            known_fail: false
+          - check: 'test/load_test'
+            exclude: 'capital'
+            known_fail: false
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Run clang-format style check for C/C++ programs.
+        id: check
+        uses: ./../clang-format-action
+        continue-on-error: ${{ matrix.path['known_fail'] }}
+        with:
+          check-path: ${{ matrix.path['check'] }}
+          clang-format-version: ${{ matrix.clang-format-version }}
+          exclude-regex: ${{ matrix.path['exclude'] }}
+      - name: Incorrect success on known-fail test
+        if: ${{ steps.check.outcome == 'success' && matrix.path['known_fail'] }}
+        run: exit 1
