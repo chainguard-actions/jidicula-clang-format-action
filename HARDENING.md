@@ -8,7 +8,7 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
 Action **jidicula--clang-format-action/v4.18.0** was hardened automatically. 8 finding(s) were identified and resolved across 1 iteration(s).
 
@@ -16,30 +16,30 @@ Action **jidicula--clang-format-action/v4.18.0** was hardened automatically. 8 f
 
 ### script-injection (severity: high)
 
-Multiple GitHub Actions expressions (${{ ... }}) are directly interpolated inside run: shell command strings in action.yml, violating rule (a). 
+Multiple ${{ }} expressions are interpolated directly inside run: shell command strings in action.yml, violating rule (a). This allows template substitution to inject arbitrary shell metacharacters before the shell ever sees the string.
 
-1. Line 34: `"${{ github.action_path }}/check.sh" "${{ inputs.clang-format-version }}" "${{ inputs.check-path }}" "${{ inputs.fallback-style }}" "${{ inputs.exclude-regex }}" "${{ inputs.include-regex }}"` — Five `inputs.*` values and `github.action_path` are interpolated directly into the shell command. Attacker-controlled inputs (e.g. `inputs.exclude-regex`, `inputs.include-regex`) can inject arbitrary shell commands.
+1. Line 33 (step 1): `"${{ github.action_path }}/check.sh" "${{ inputs.clang-format-version }}" "${{ inputs.check-path }}" "${{ inputs.fallback-style }}" "${{ inputs.exclude-regex }}" "${{ inputs.include-regex }}"` — all five inputs and github.action_path are interpolated directly.
 
-2. Line 39: `SHA="${{ github.event.pull_request.head.sha }}"` — `github.event.pull_request.head.sha` is interpolated directly into the shell.
+2. Line 39 (step 2): `SHA="${{ github.event.pull_request.head.sha }}"` — attacker-controlled PR head SHA interpolated directly.
 
-3. Line 44: `run: echo "SHA=${{ github.sha }}" >> $GITHUB_ENV` — `github.sha` is interpolated directly into the shell.
+3. Line 44 (step 3): `echo "SHA=${{ github.sha }}" >> $GITHUB_ENV` — github.sha interpolated directly.
 
-4. Line 49: `DEEPLINK="${{ github.server_url }}/${{ github.repository }}/commit/${{ env.SHA }}"` — `github.server_url`, `github.repository`, and `env.SHA` are interpolated directly into the shell.
+4. Line 48 (step 4): `DEEPLINK="${{ github.server_url }}/${{ github.repository }}/commit/${{ env.SHA }}"` — multiple github context values interpolated directly.
 
 Locations:
 
-- `action.yml:34`
+- `action.yml:33`
 - `action.yml:39`
 - `action.yml:44`
-- `action.yml:49`
+- `action.yml:48`
 
 ### github-env-injection (severity: high)
 
-Untrusted GitHub context values are written to $GITHUB_ENV without sanitization (no `printf '%s' ... | tr -d '\n\r'` step).
+Untrusted input values are written to $GITHUB_ENV without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`), enabling environment variable injection attacks.
 
-1. Lines 39-40: `SHA="${{ github.event.pull_request.head.sha }}"` is captured and then `echo "SHA=$SHA" >> $GITHUB_ENV` writes it to GITHUB_ENV. The value from `github.event.pull_request.head.sha` is attacker-controlled (PR head SHA can be crafted) and is written without sanitization, enabling newline injection into the environment file.
+1. Line 39–40 (step 2): `SHA="${{ github.event.pull_request.head.sha }}"` is assigned from an attacker-controlled PR head SHA, then `echo "SHA=$SHA" >> $GITHUB_ENV` writes it unsanitized. A newline in the SHA value could inject additional environment variables.
 
-2. Line 44: `echo "SHA=${{ github.sha }}" >> $GITHUB_ENV` writes `github.sha` directly to GITHUB_ENV without sanitization.
+2. Line 44 (step 3): `echo "SHA=${{ github.sha }}" >> $GITHUB_ENV` writes github.sha directly to GITHUB_ENV without sanitization.
 
 Locations:
 
@@ -102,5 +102,9 @@ Locations:
 
 **Notes:**
 
-Rewrote action.yml to move all ${{ }} expressions out of run: blocks and into env: blocks. Specifically: (1) Step 1 (check.sh invocation): moved github.action_path and all five inputs.* values to env: block; optional regex inputs use ${VAR:+"$VAR"} to avoid empty argument passing. (2) Step 'Save PR head commit SHA': moved github.event.pull_request.head.sha to env: block as PR_HEAD_SHA and sanitized with printf/tr before writing to $GITHUB_ENV. (3) Step 'Save latest commit SHA if not PR': moved github.sha to env: block as GITHUB_SHA_VALUE and sanitized with printf/tr before writing to $GITHUB_ENV. (4) Step 'Report failure in job summary': moved github.server_url, github.repository, and env.SHA to env: block as SERVER_URL, REPOSITORY, COMMIT_SHA respectively.
+Fixed all findings in action.yml:
+1. Step 1 (check.sh): Moved github.action_path and all 5 inputs (clang-format-version, check-path, fallback-style, exclude-regex, include-regex) to env: block. Used ${VAR:+"$VAR"} for optional empty-default inputs (exclude-regex, include-regex) to avoid passing empty positional arguments.
+2. Step 2 (Save PR head commit SHA): Moved github.event.pull_request.head.sha to env: PR_HEAD_SHA, then sanitized with printf + tr -d '\n\r' before writing to $GITHUB_ENV.
+3. Step 3 (Save latest commit SHA): Moved github.sha to env: GITHUB_SHA_VALUE, then sanitized with printf + tr -d '\n\r' before writing to $GITHUB_ENV.
+4. Step 4 (Report failure): Moved github.server_url, github.repository, and env.SHA to env: block as SERVER_URL, REPOSITORY, and COMMIT_SHA respectively.
 

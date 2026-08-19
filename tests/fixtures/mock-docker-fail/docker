@@ -1,0 +1,36 @@
+#!/bin/sh
+# Mock docker that fails (exits 1) when checking C files.
+# Intercepts clang-format image calls and simulates a failing format check.
+
+if [ "$1" != "run" ]; then
+  exit 0
+fi
+
+# Check if this is a --version call
+for arg in "$@"; do
+  case "$arg" in
+    --version)
+      echo "clang-format version 18.0.0 (mock)"
+      exit 0
+      ;;
+  esac
+done
+
+# For --dry-run --Werror calls, emit a diagnostic and exit 1 (format failure).
+# Find the last argument(s) that look like C files and emit errors for them.
+last_file=""
+for arg in "$@"; do
+  case "$arg" in
+    *.c|*.h|*.cpp|*.cc|*.cxx|*.hpp)
+      last_file="$arg"
+      ;;
+  esac
+done
+
+if [ -n "$last_file" ]; then
+  echo "${last_file}:1:1: error: code should be clang-formatted [-Wclang-format-violations]" >&2
+  exit 1
+fi
+
+# No C files found - pass
+exit 0

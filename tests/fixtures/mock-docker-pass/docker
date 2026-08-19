@@ -1,0 +1,20 @@
+#!/bin/sh
+# Mock docker that always succeeds (exits 0).
+# Intercepts clang-format image calls and simulates a passing format check.
+
+if [ "$1" != "run" ]; then
+  exit 0
+fi
+
+# Check if this is a --version call
+for arg in "$@"; do
+  case "$arg" in
+    --version)
+      echo "clang-format version 18.0.0 (mock)"
+      exit 0
+      ;;
+  esac
+done
+
+# For all other calls (--dry-run --Werror etc.), exit 0 (all files pass)
+exit 0

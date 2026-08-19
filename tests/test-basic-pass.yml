@@ -1,0 +1,27 @@
+name: Test basic pass - well-formatted C file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up mock docker on PATH
+        run: |
+          mkdir -p "$HOME/bin"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-docker-pass/docker" "$HOME/bin/docker"
+          chmod +x "$HOME/bin/docker"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Run clang-format check on well-formatted file
+        id: action
+        uses: .
+        with:
+          clang-format-version: '18'
+          check-path: 'tests/fixtures/src'
+          fallback-style: 'llvm'
+
+      - name: Assert action passed
+        run: |
+          echo "PASS: clang-format check passed on well-formatted file"

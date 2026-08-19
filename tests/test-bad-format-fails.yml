@@ -1,0 +1,35 @@
+name: Test bad format - action fails on poorly formatted C file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up mock docker on PATH
+        run: |
+          mkdir -p "$HOME/bin"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-docker-fail/docker" "$HOME/bin/docker"
+          chmod +x "$HOME/bin/docker"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Run clang-format check (expect failure)
+        id: action
+        uses: .
+        with:
+          clang-format-version: '18'
+          check-path: 'tests/fixtures/badsrc'
+          fallback-style: 'llvm'
+        continue-on-error: true
+
+      - name: Assert action failed as expected
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail on badly-formatted file, but got: $OUTCOME"
+            exit 1
+          fi
+          echo "PASS: action correctly failed on badly-formatted file"

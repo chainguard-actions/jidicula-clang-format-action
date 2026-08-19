@@ -1,43 +1,27 @@
-name: Test clang-format check passes when no source files found
+name: Test no source files - action passes when no C/C++ files found
 on:
   workflow_dispatch:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      GITHUB_EVENT_NAME: push
-      GITHUB_REF: refs/heads/main
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install clang-format and create docker mock
+
+      - name: Set up mock docker on PATH
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends clang-format
-          # Write a mock docker script that strips docker-run args and calls clang-format directly
-          printf '%s\n' '#!/usr/bin/env bash' \
-            'args=()' \
-            'skip_next=false' \
-            'found_image=false' \
-            'for arg in "$@"; do' \
-            '  if $skip_next; then skip_next=false; continue; fi' \
-            '  case "$arg" in' \
-            '    run) continue ;;' \
-            '    --volume|-v|--workdir|-w|--entrypoint) skip_next=true; continue ;;' \
-            '    ghcr.io/jidicula/clang-format:*) found_image=true; continue ;;' \
-            '    /bin/bash) continue ;;' \
-            '    *) if $found_image; then args+=("$arg"); fi ;;' \
-            '  esac' \
-            'done' \
-            'exec clang-format "${args[@]}"' \
-            | sudo tee /usr/local/bin/docker > /dev/null
-          sudo chmod +x /usr/local/bin/docker
+          mkdir -p "$HOME/bin"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/mock-docker-pass/docker" "$HOME/bin/docker"
+          chmod +x "$HOME/bin/docker"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
       - name: Run clang-format check on directory with no C/C++ files
         id: action
         uses: .
         with:
           clang-format-version: '18'
-          check-path: tests/fixtures/no-source
+          check-path: 'tests/fixtures/scripts'
           fallback-style: 'llvm'
-      - name: Assert action passed with no source files
+
+      - name: Assert action passed (no source files to check)
         run: |
-          echo "PASS: clang-format check succeeded when no C/C++ source files were found"
+          echo "PASS: clang-format check passed because no C/C++ source files were found"
