@@ -1,8 +1,10 @@
 name: "clang-format Check"
 description: "Use clang-format to see if your C/C++/Protobuf code is formatted according to project guidelines."
+
 branding:
   icon: "check-circle"
   color: "blue"
+
 inputs:
   clang-format-version:
     description: 'The major version of clang-format that you want to use.'
@@ -24,6 +26,7 @@ inputs:
     description: 'A regex to override the C/C++/Protobuf/CUDA filetype regex. that should be checked. Default results in the regex defined in `check.sh`.'
     required: false
     default: ''
+
 runs:
   using: "composite"
   steps:
@@ -70,12 +73,10 @@ runs:
       run: |
         safe_sha=$(printf '%s' "$COMMIT_SHA" | tr -d '\n\r')
         echo "SHA=$safe_sha" >> "$GITHUB_ENV"
+
     - name: Report failure in job summary
       if: failure()
-      env:
-        SERVER_URL: ${{ github.server_url }}
-        REPOSITORY: ${{ github.repository }}
       run: |
-        DEEPLINK="$SERVER_URL/$REPOSITORY/commit/$SHA"
-        echo -e "Format check failed on commit [${GITHUB_SHA:0:8}]($DEEPLINK) with files:\n$(< $GITHUB_WORKSPACE/failing-files.txt)" >> $GITHUB_STEP_SUMMARY
+        DEEPLINK="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$SHA"
+        echo -e "Format check failed on commit [${GITHUB_SHA:0:8}]($DEEPLINK) with files:\n$(<"$GITHUB_WORKSPACE/failing-files.txt")" >> "$GITHUB_STEP_SUMMARY"
       shell: bash

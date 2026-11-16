@@ -4,98 +4,56 @@
 
 > This file was generated automatically by the hardening agent.
 
-**Policy SHA:** `d636be7e43ef829af6e853da6b3c7566db9f72fe`
+**Policy SHA:** `374911c4be584df24e6da57af2d990570ef0f859`
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
 **Harden Agent Version:** `2`
 
-Action **jidicula--clang-format-action/v4.17.0** was hardened automatically. 10 finding(s) were identified and resolved across 2 iteration(s).
+Action **jidicula--clang-format-action/v4.17.0** was hardened automatically. 12 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Sub-rule (a): Multiple ${{ ... }} expressions are interpolated directly inside run: shell command strings.
-
-1. action.yml line 34: `"${{ github.action_path }}/check.sh" "${{ inputs.clang-format-version }}" "${{ inputs.check-path }}" "${{ inputs.fallback-style }}" "${{ inputs.exclude-regex }}" "${{ inputs.include-regex }}"` — inputs.* and github.* expressions directly in run: block.
-
-2. action.yml line 40: `SHA="${{ github.event.pull_request.head.sha }}"` — github.* expression directly in run: block.
-
-3. action.yml line 45: `run: echo "SHA=${{ github.sha }}" >> $GITHUB_ENV` — github.* expression directly in run: block.
-
-4. action.yml line 50: `DEEPLINK="${{ github.server_url }}/${{ github.repository }}/commit/${{ env.SHA }}"` — github.* and env.* expressions directly in run: block.
-
-5. .github/workflows/clang-format-image.yml line 54: `VERSION="${{ matrix.version-pair.version }}"` — matrix.* expression directly in run: block.
-
-6. .github/workflows/tests.yml line 46: `run: test/test.sh ${{ matrix.clang-format-version }}` — matrix.* expression directly in run: block, unquoted.
+Rule (a): the first composite step puts expressions straight into the run script: "${{ github.action_path }}/check.sh" "${{ inputs.clang-format-version }}" "${{ inputs.check-path }}" "${{ inputs.fallback-style }}" "${{ inputs.exclude-regex }}" "${{ inputs.include-regex }}". An input containing a double quote can break out of the quoting and run its own commands. Fix: pass these values through env: variables and quote them as "$VAR".
 
 Locations:
 
 - `action.yml:34`
+
+### script-injection (severity: high)
+
+Rule (a): the 'Save PR head commit SHA' step puts an expression straight into the run script: SHA="${{ github.event.pull_request.head.sha }}". The 'Save latest commit SHA if not PR' step does the same: echo "SHA=${{ github.sha }}" >> $GITHUB_ENV. Fix: read the value from an env: variable or use the built-in $GITHUB_SHA.
+
+Locations:
+
 - `action.yml:40`
 - `action.yml:45`
+
+### script-injection (severity: high)
+
+Rule (a): the 'Report failure in job summary' step puts expressions straight into the run script: DEEPLINK="${{ github.server_url }}/${{ github.repository }}/commit/${{ env.SHA }}". env.SHA is set from earlier steps and from the calling workflow's environment, so the caller controls it. Fix: use the quoted variables "$GITHUB_SERVER_URL", "$GITHUB_REPOSITORY" and "$SHA" instead.
+
+Locations:
+
 - `action.yml:50`
-- `.github/workflows/clang-format-image.yml:54`
-- `.github/workflows/tests.yml:46`
 
 ### github-env-injection (severity: high)
 
-Untrusted input values are written to $GITHUB_ENV without the required sanitization step (printf '%s' ... | tr -d '\n\r').
-
-1. action.yml lines 40-41: `SHA="${{ github.event.pull_request.head.sha }}"` is assigned from a github context value, then `echo "SHA=$SHA" >> $GITHUB_ENV` writes it to GITHUB_ENV without sanitization. An attacker-controlled PR head SHA containing newlines could inject arbitrary environment variables.
-
-2. action.yml line 45: `echo "SHA=${{ github.sha }}" >> $GITHUB_ENV` writes a github context value directly to GITHUB_ENV without sanitization.
-
-3. .github/workflows/clang-format-image.yml lines 54-56: `VERSION="${{ matrix.version-pair.version }}"` is assigned from a matrix value, then `echo "MAJOR_VERSION=$MAJOR_VERSION" >> "$GITHUB_ENV"` writes a derived value to GITHUB_ENV without sanitization.
+The 'Save PR head commit SHA' step writes a value taken from github.event.pull_request.head.sha into $GITHUB_ENV (echo "SHA=$SHA" >> $GITHUB_ENV) without the printf '%s' ... | tr -d '\n\r' cleanup step first.
 
 Locations:
 
-- `action.yml:40`
+- `action.yml:41`
+
+### github-env-injection (severity: high)
+
+The 'Save latest commit SHA if not PR' step writes ${{ github.sha }} straight into $GITHUB_ENV (echo "SHA=${{ github.sha }}" >> $GITHUB_ENV) without the printf '%s' ... | tr -d '\n\r' cleanup step first.
+
+Locations:
+
 - `action.yml:45`
-- `.github/workflows/clang-format-image.yml:54`
-
-### unpinned-uses (severity: high)
-
-Multiple uses: references are pinned to mutable tags or version strings rather than immutable 40-character commit SHAs. This exposes the workflow to supply-chain attacks if the referenced action is compromised or the tag is moved.
-
-- .github/workflows/clang-format-image.yml: `actions/checkout@v6`, `docker/login-action@v4.0.0`, `docker/metadata-action@v6.0.0`, `docker/build-push-action@v7.0.0`, `actions/setup-go@v6`
-- .github/workflows/release.yml: `actions/checkout@v6`, `softprops/action-gh-release@v2`
-- .github/workflows/shell-lint.yml: `actions/checkout@v6`, `ludeeus/action-shellcheck@2.0.0`, `actions/setup-go@v6`
-- .github/workflows/tests.yml: `actions/checkout@v6` (used twice)
-
-Locations:
-
-- `.github/workflows/clang-format-image.yml:52`
-- `.github/workflows/clang-format-image.yml:59`
-- `.github/workflows/clang-format-image.yml:65`
-- `.github/workflows/clang-format-image.yml:74`
-- `.github/workflows/clang-format-image.yml:84`
-- `.github/workflows/release.yml:14`
-- `.github/workflows/release.yml:17`
-- `.github/workflows/shell-lint.yml:16`
-- `.github/workflows/shell-lint.yml:18`
-- `.github/workflows/shell-lint.yml:20`
-- `.github/workflows/tests.yml:44`
-- `.github/workflows/tests.yml:83`
-
-### missing-permissions (severity: medium)
-
-The following workflow files have no top-level `permissions:` key and no job-level `permissions:` key on any job. Without explicit permissions, workflows inherit the default repository token permissions, which may be overly broad (e.g., write access to contents).
-
-- .github/workflows/release.yml: No top-level or job-level permissions block.
-- .github/workflows/shell-lint.yml: No top-level or job-level permissions block.
-- .github/workflows/tests.yml: No top-level or job-level permissions block.
-- .github/workflows/test-ubuntu-22.04.yml: No top-level or job-level permissions block.
-- .github/workflows/test-ubuntu-24.04.yml: No top-level or job-level permissions block.
-
-Locations:
-
-- `.github/workflows/release.yml:1`
-- `.github/workflows/shell-lint.yml:1`
-- `.github/workflows/tests.yml:1`
-- `.github/workflows/test-ubuntu-22.04.yml:1`
-- `.github/workflows/test-ubuntu-24.04.yml:1`
 
 ### static-inline-injection (severity: high)
 
@@ -145,29 +103,96 @@ Locations:
 
 - `action.yml:40`
 
+### prior-fix (severity: high)
+
+Carried forward from this version's previous harden, which fixed it; fix it again unless the code no longer has the problem. The previous harden changed action.yml without recording a finding for it, and this analysis reported nothing there. Re-apply its security changes unless the code no longer needs them. The previous patch:
+```diff
+diff --git a/action.yml b/action.yml
+index 5bcadd4..da90e79 100644
+--- a/action.yml
++++ b/action.yml
+@@ -1,10 +1,8 @@
+ name: "clang-format Check"
+ description: "Use clang-format to see if your C/C++/Protobuf code is formatted according to project guidelines."
+-
+ branding:
+   icon: "check-circle"
+   color: "blue"
+-
+ inputs:
+   clang-format-version:
+     description: 'The major version of clang-format that you want to use.'
+@@ -26,27 +24,58 @@ inputs:
+     description: 'A regex to override the C/C++/Protobuf/CUDA filetype regex. that should be checked. Default results in the regex defined in `check.sh`.'
+     required: false
+     default: ''
+-
+ runs:
+   using: "composite"
+   steps:
+-    - run: |
+-        "${{ github.action_path }}/check.sh" "${{ inputs.clang-format-version }}" "${{ inputs.check-path }}" "${{ inputs.fallback-style }}" "${{ inputs.exclude-regex }}" "${{ inputs.include-regex }}"
++    - env:
++        ACTION_PATH: ${{ github.action_path }}
++        CLANG_FORMAT_VERSION: ${{ inputs.clang-format-version }}
++        CHECK_PATH: ${{ inputs.check-path }}
++        FALLBACK_STYLE: ${{ inputs.fallback-style }}
++        EXCLUDE_REGEX: ${{ inputs.exclude-regex }}
++        INCLUDE_REGEX: ${{ inputs.include-regex }}
++      run: |
++        "$ACTION_PATH/check.sh" "$CLANG_FORMAT_VERSION" "$CHECK_PATH" "$FALLBACK_STYLE" "$EXCLUDE_REGEX" "$INCLUDE_REGEX"
+       shell: bash
+     - name: Save PR head commit SHA
+       if: failure() && github.event_name == 'pull_request'
+       shell: bash
++      env:
++        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+       run: |
+-        SHA="${{ github.event.pull_request.head.sha }}"
+-        echo "SHA=$SHA" >> $GITHUB_ENV
++        safe_sha=$(printf '%s' "$PR_HEAD_SHA" | tr -d '\n\r')
++        echo "SHA=$safe_sha" >> "$GITHUB_ENV"
+     - name: Save latest commit SHA if not PR
+       if: failure() && github.event_name != 'pull_request'
+       shell: bash
+-      run: echo "SHA=${{ github.sha }}" >> $GITHUB_ENV
+-
++      env:
++        COMMIT_SHA: ${{ github.sha }}
++      run: |
++        safe_sha=$(printf '%s' "$COMMIT_SHA" | tr -d '\n\r')
++        echo "SHA=$safe_sha" >> "$GITHUB_ENV"
+     - name: Report failure in job summary
+       if: failure()
++      env:
++        SERVER_URL: ${{ github.server_url }}
++        REPOSITORY: ${{ github.repository }}
+       run: |
+-        DEEPLINK="${{ github.server_url }}/${{ github.repository }}/commit/${{ env.SHA }}"
+-        echo -e "Format check failed on commit [${GITHUB_SHA:0:8}]($DEEPLINK) with files:\n$(<$GITHUB_WORKSPACE/failing-files.txt)" >> $GITHUB_STEP_SUMMARY
++        DEEPLINK="$SERVER_URL/$REPOSITORY/commit/$SHA"
++        echo -e "Format check failed on commit [${GITHUB_SHA:0:8}]($DEEPLINK) with files:\n$(< $GITHUB_WORKSPACE/failing-files.txt)" >> $GITHUB_STEP_SUMMARY
+       shell: bash
+
+```
+
+Locations:
+
+- `action.yml`
+
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** script-injection, static-inline-injection, github-env-injection, unpinned-uses, missing-permissions
+**Fixes applied:** script-injection, github-env-injection, static-inline-injection, prior-fix
 
 **Notes:**
 
-Fixed all findings across action.yml and .github/workflows/*.yml files:
+I fixed all the findings in action.yml.
 
-1. script-injection/static-inline-injection: Moved all ${{ inputs.* }}, ${{ github.* }}, and ${{ matrix.* }} expressions from run: blocks into env: blocks in action.yml (steps 1-4) and .github/workflows/clang-format-image.yml (Parse version tags step) and .github/workflows/tests.yml (Build and test step).
+- **Main check step:** the action path and the five inputs now go through the step's env: block. They are passed to check.sh as double-quoted "$VAR" values, in the same order and with the same argument count as before.
+- **The two SHA-saving steps:** the PR head SHA and github.sha now come in through env:. Newlines are stripped with printf '%s' | tr -d '\n\r' before the value is written to "$GITHUB_ENV".
+- **Job summary step:** it now uses the runner's built-in variables $GITHUB_SERVER_URL and $GITHUB_REPOSITORY, plus $SHA, instead of ${{ }} expressions. I also put quotes around the paths to the failing-files list and the summary file.
 
-2. github-env-injection: Added sanitization (printf '%s' "$VAR" | tr -d '\n\r') before writing to $GITHUB_ENV in action.yml (both SHA-saving steps) and clang-format-image.yml (Parse version tags step).
-
-3. unpinned-uses: Pinned all 7 action references to full 40-char commit SHAs with tag comments: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803, docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2, docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf, docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294, actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16, softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65, ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38.
-
-4. missing-permissions: Added permissions blocks to release.yml (contents: write), shell-lint.yml (contents: read), tests.yml (contents: read), test-ubuntu-22.04.yml (contents: read), test-ubuntu-24.04.yml (contents: read).
-
-### Iteration 2
-
-**Fixes applied:** script-injection
-
-**Notes:**
-
-Fixed script injection in `.github/workflows/clang-format-image.yml` line 104: moved `${{ secrets.GHCR_DELETE_TOKEN }}` out of the `run:` shell command and into an `env:` block as `GHCR_DELETE_TOKEN`, then referenced it as `"$GHCR_DELETE_TOKEN"` in the ghcr-cleaner command. This prevents shell metacharacters in the secret value from being interpreted by the shell.
+This repeats the security changes from the previous harden. Nothing was run or tested in this pass.
 
